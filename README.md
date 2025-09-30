@@ -4,5 +4,5 @@ This repository demonstrates a CI workflow that automatically updates the README
 
 ## Recent Activity
 <!--ACTIVITY-START-->
-
+<!--ACTIVITY-START-->
 <!--ACTIVITY-END-->
