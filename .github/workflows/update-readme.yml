@@ -1,97 +1,50 @@
-name: Update README Activity
+name: Update GitHub Activity
 
 on:
-  workflow_dispatch:        # 手動觸發
+  workflow_dispatch:
   schedule:
-    - cron: "0 * * * *"     # 每小時跑一次，可自行調整
+    - cron: "0 * * * *"   # 每小時跑一次
 
 permissions:
   contents: write
 
-# 想改顯示幾筆活動，改這裡（字串也可）
-env:
-  MAX_ITEMS: "8"
-
 jobs:
-  update:
+  update-readme:
     runs-on: ubuntu-latest
-
     steps:
-      - name: Checkout
+      - name: Checkout repo
         uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
         with:
-          # 用你的 PAT（REPO_TOKEN）checkout & push，比 GITHUB_TOKEN 更通用
-          token: ${{ secrets.REPO_TOKEN }}
+          node-version: 18
 
-      # 用 github-script 直接呼叫 Octokit，無需另裝套件，最穩
-      - name: Build activity markdown
-        uses: actions/github-script@v7
-        id: build
-        with:
-          github-token: ${{ secrets.REPO_TOKEN }}
-          script: |
-            const owner = context.repo.owner;
-            const repo  = context.repo.repo;
-            const max   = parseInt(process.env.MAX_ITEMS || '8', 10);
-            const repoUrl = `https://github.com/${owner}/${repo}`;
-
-            // 取較多筆，再自行過濾/限量
-            const { data: events } = await github.rest.activity.listRepoEvents({
-              owner, repo, per_page: 50
-            });
-
-            const lines = [];
-            for (const e of events) {
-              if (lines.length >= max) break;
-
-              // 跳過機器人自己推的活動，避免噪音
-              if (e.actor?.login === 'github-actions[bot]') continue;
-
-              switch (e.type) {
-                case 'IssuesEvent': {
-                  const issue = e.payload.issue;
-                  if (!issue) break;
-                  const act = e.payload.action; // opened/closed/reopened
-                  const emoji = act === 'opened' ? '🟢' : act === 'closed' ? '🔴' : '🟡';
-                  lines.push(`- ${emoji} **${act}** issue [#${issue.number}](${issue.html_url}) — _${issue.title}_`);
-                  break;
-                }
-                case 'PullRequestEvent': {
-                  const pr = e.payload.pull_request;
-                  if (!pr) break;
-                  let act = e.payload.action;
-                  let emoji = '📌';
-                  if (act === 'closed' && pr.merged) { act = 'merged'; emoji = '🎉'; }
-                  else if (act === 'closed') { emoji = '❌'; }
-                  lines.push(`- ${emoji} **${act}** PR [#${pr.number}](${pr.html_url}) — _${pr.title}_`);
-                  break;
-                }
-                case 'PushEvent': {
-                  const branch = e.payload.ref?.replace('refs/heads/', '') || 'main';
-                  const count  = e.payload.commits?.length || 1;
-                  lines.push(`- 🚀 pushed **${count}** commit(s) to [${branch}](${repoUrl}/commits/${branch})`);
-                  break;
-                }
-                default:
-                  // 需要可再擴充（ReleaseEvent、CreateEvent…）
-              }
-            }
-
-            const heading = '## 🔥 Recent Activities';
-            const body = (lines.length ? lines.join('\n') : '- ℹ️ No recent activity.').trim();
-
-            const fs = require('fs');
-            fs.writeFileSync('activity.md', `${heading}\n${body}\n`);
-
-      - name: Update README between markers
+      - name: Generate GitHub Activity
         run: |
-          # 以 activity.md 覆寫 README 中的標記區塊
-          awk 'BEGIN{start=0} /<!--ACTIVITY-START-->/ {print; while((getline line < "activity.md") > 0) print line; start=1; next} /<!--ACTIVITY-END-->/ {if(!start) print} !/<!--ACTIVITY-START-->/ && !/<!--ACTIVITY-END-->/' README.md > README.new
+          echo "🔥 **Recent Activities**" > activities.md
+          echo "" >> activities.md
+
+          # Issues
+          echo "### 🐛 Issues" >> activities.md
+          gh api repos/${{ github.repository }}/issues --jq '.[] | select(.pull_request|not) | "- \(.state) issue [#\(.number)](\(.html_url)) — \(.title)"' | head -n 5 >> activities.md
+          echo "" >> activities.md
+
+          # Pull Requests
+          echo "### 🚀 Pull Requests" >> activities.md
+          gh api repos/${{ github.repository }}/pulls?state=all --jq '.[] | "- \(.state) PR [#\(.number)](\(.html_url)) — \(.title)"' | head -n 5 >> activities.md
+          echo "" >> activities.md
+
+          # 替換 README 的區塊
+          awk 'BEGIN{inblock=0} /<!--ACTIVITY-START-->/ {print; system("cat activities.md"); inblock=1; next} /<!--ACTIVITY-END-->/ {inblock=0} !inblock' README.md > README.new
           mv README.new README.md
+
+        env:
+          GH_TOKEN: ${{ secrets.REPO_TOKEN }}
 
       - name: Commit changes
         run: |
-          git config user.name  "github-actions[bot]"
+          git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add README.md
           git commit -m "chore: update GitHub activity" || echo "No changes to commit"
