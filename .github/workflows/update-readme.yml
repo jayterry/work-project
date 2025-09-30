@@ -23,8 +23,9 @@ jobs:
           git log -n 5 --pretty=format:"- %s (%h) %ad" --date=short >> activity.md
           echo "<!--ACTIVITY-END-->" >> activity.md
 
-          # 用 sed 替換 README.md 中的區塊
-          sed -i '/<!--ACTIVITY-START-->/,<!--ACTIVITY-END-->/c\<!--ACTIVITY-START-->\n'"$(tail -n +2 activity.md)"'\n<!--ACTIVITY-END-->' README.md
+          # Linux 兼容版，用 awk 取代 sed
+          awk 'BEGIN{start=0} /<!--ACTIVITY-START-->/ {print; while((getline line < "activity.md") > 0) print line; start=1; next} /<!--ACTIVITY-END-->/ {if(!start) print} !/<!--ACTIVITY-START-->/ && !/<!--ACTIVITY-END-->/' README.md > README.new
+          mv README.new README.md
 
       - name: Commit changes
         run: |
