@@ -1,4 +1,10 @@
 ## 🔥 Recent Activities
 <!--ACTIVITY-START-->
-## 🔥 Recent Activities
-- 🟢 **opened** issue [#1](https://github.com/jayterry/work-project/issues/1) — _test_
+🔥 **Recent Activities**
+
+### 🐛 Issues
+- open issue [#4](https://github.com/jayterry/work-project/issues/4) — update test
+
+### 🚀 Pull Requests
+- closed PR [#3](https://github.com/jayterry/work-project/pull/3) — Automate README Updates with GitHub Actions
+
