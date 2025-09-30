@@ -4,9 +4,5 @@ This repository demonstrates a CI workflow that automatically updates the README
 
 ## Recent Activity
 <!--ACTIVITY-START-->
-## Recent Activity
-<!--ACTIVITY-START-->
-- chore: update recent activity (a1e038c) 2025-09-30<!--ACTIVITY-END-->
-## Recent Activity
-<!--ACTIVITY-START-->
-<!--ACTIVITY-START-->
+_No activity yet_
+<!--ACTIVITY-END-->
