@@ -20,6 +20,9 @@ jobs:
         with:
           node-version: 18
 
+      - name: Install dependencies
+        run: npm install @octokit/rest
+
       - name: Generate GitHub activity
         run: |
           echo "## 🔥 Recent Activities" > activity.md
@@ -30,42 +33,40 @@ jobs:
           const fs = require("fs");
 
           const octokit = new Octokit({ auth: process.env.REPO_TOKEN });
-          const owner = process.env.GITHUB_REPOSITORY.split("/")[0];
-          const repo = process.env.GITHUB_REPOSITORY.split("/")[1];
+          const [owner, repo] = process.env.GITHUB_REPOSITORY.split("/");
 
           async function main() {
-            const { data: events } = await octokit.activity.listRepoEvents({
-              owner,
-              repo,
-              per_page: 10
-            });
+            try {
+              const { data: events } = await octokit.activity.listRepoEvents({
+                owner,
+                repo,
+                per_page: 10
+              });
 
-            let log = "";
-            for (const e of events) {
-              if (e.type === "IssuesEvent") {
-                if (e.payload.action === "opened") {
-                  log += `- 🟢 Opened issue [#${e.payload.issue.number}](${e.payload.issue.html_url}) — *${e.payload.issue.title}* (${e.payload.issue.user.login})\n`;
-                } else if (e.payload.action === "closed") {
-                  log += `- 🔴 Closed issue [#${e.payload.issue.number}](${e.payload.issue.html_url}) — *${e.payload.issue.title}*\n`;
-                } else if (e.payload.action === "reopened") {
-                  log += `- 🟡 Reopened issue [#${e.payload.issue.number}](${e.payload.issue.html_url})\n`;
+              let log = "";
+              for (const e of events) {
+                if (e.type === "IssuesEvent") {
+                  if (e.payload.action === "opened") {
+                    log += `- 🟢 Opened issue [#${e.payload.issue.number}](${e.payload.issue.html_url}) — *${e.payload.issue.title}* (${e.payload.issue.user.login})\n`;
+                  } else if (e.payload.action === "closed") {
+                    log += `- 🔴 Closed issue [#${e.payload.issue.number}](${e.payload.issue.html_url}) — *${e.payload.issue.title}*\n`;
+                  }
+                } else if (e.type === "PullRequestEvent") {
+                  if (e.payload.action === "opened") {
+                    log += `- 📌 Opened PR [#${e.payload.pull_request.number}](${e.payload.pull_request.html_url}) — *${e.payload.pull_request.title}*\n`;
+                  } else if (e.payload.action === "closed" && e.payload.pull_request.merged) {
+                    log += `- 🎉 Merged PR [#${e.payload.pull_request.number}](${e.payload.pull_request.html_url})\n`;
+                  }
+                } else if (e.type === "PushEvent") {
+                  log += `- 🚀 Pushed ${e.payload.commits.length} commit(s) to [${e.repo.name}](https://github.com/${e.repo.name}/commits/${e.payload.ref.replace("refs/heads/","")})\n`;
                 }
               }
-              else if (e.type === "PullRequestEvent") {
-                if (e.payload.action === "opened") {
-                  log += `- 📌 Opened PR [#${e.payload.pull_request.number}](${e.payload.pull_request.html_url}) — *${e.payload.pull_request.title}*\n`;
-                } else if (e.payload.action === "closed" && e.payload.pull_request.merged) {
-                  log += `- 🎉 Merged PR [#${e.payload.pull_request.number}](${e.payload.pull_request.html_url})\n`;
-                } else if (e.payload.action === "closed") {
-                  log += `- ❌ Closed PR [#${e.payload.pull_request.number}](${e.payload.pull_request.html_url})\n`;
-                }
-              }
-              else if (e.type === "PushEvent") {
-                log += `- 🚀 Pushed ${e.payload.commits.length} commit(s) to [${e.repo.name}](https://github.com/${e.repo.name}/commits/${e.payload.ref.replace("refs/heads/","")})\n`;
-              }
+
+              fs.appendFileSync("activity.md", log || "- ℹ️ No recent activity.\n");
+            } catch (err) {
+              console.error("Error fetching events:", err);
+              process.exit(1);
             }
-
-            fs.appendFileSync("activity.md", log);
           }
           main();
           EOF
