@@ -24,7 +24,7 @@ jobs:
         with:
           github-token: ${{ secrets.REPO_TOKEN }}
           script: |
-            const { data: events } = await github.activity.listRepoEvents({
+            const { data: events } = await github.rest.activity.listRepoEvents({
               owner: context.repo.owner,
               repo: context.repo.repo,
               per_page: 10
