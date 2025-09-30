@@ -6,6 +6,8 @@ This repository demonstrates a CI workflow that automatically updates the README
 <!--ACTIVITY-START-->
 ## Recent Activities
 - opened issue #1 in [work-project](https://github.com/jayterry/work-project)
+## Recent Activities
+- opened issue #1 in [work-project](https://github.com/jayterry/work-project)
 <!--ACTIVITY-START-->
 <!--ACTIVITY-START-->
 <!--ACTIVITY-START-->
