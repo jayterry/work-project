@@ -1,87 +1,98 @@
 name: Update README Activity
 
 on:
-  workflow_dispatch:   # 手動觸發
+  workflow_dispatch:        # 手動觸發
   schedule:
-    - cron: "0 * * * *"   # 每小時跑一次
+    - cron: "0 * * * *"     # 每小時跑一次，可自行調整
 
 permissions:
   contents: write
 
+# 想改顯示幾筆活動，改這裡（字串也可）
+env:
+  MAX_ITEMS: "8"
+
 jobs:
-  update-readme:
+  update:
     runs-on: ubuntu-latest
+
     steps:
-      - name: Checkout repo
+      - name: Checkout
         uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v3
         with:
-          node-version: 18
+          # 用你的 PAT（REPO_TOKEN）checkout & push，比 GITHUB_TOKEN 更通用
+          token: ${{ secrets.REPO_TOKEN }}
 
-      - name: Install dependencies
-        run: npm install @octokit/rest
+      # 用 github-script 直接呼叫 Octokit，無需另裝套件，最穩
+      - name: Build activity markdown
+        uses: actions/github-script@v7
+        id: build
+        with:
+          github-token: ${{ secrets.REPO_TOKEN }}
+          script: |
+            const owner = context.repo.owner;
+            const repo  = context.repo.repo;
+            const max   = parseInt(process.env.MAX_ITEMS || '8', 10);
+            const repoUrl = `https://github.com/${owner}/${repo}`;
 
-      - name: Generate GitHub activity
-        run: |
-          echo "## 🔥 Recent Activities" > activity.md
-          echo "<!--ACTIVITY-START-->" >> activity.md
+            // 取較多筆，再自行過濾/限量
+            const { data: events } = await github.rest.activity.listRepoEvents({
+              owner, repo, per_page: 50
+            });
 
-          node << 'EOF'
-          const { Octokit } = require("@octokit/rest");
-          const fs = require("fs");
+            const lines = [];
+            for (const e of events) {
+              if (lines.length >= max) break;
 
-          const octokit = new Octokit({ auth: process.env.REPO_TOKEN });
-          const [owner, repo] = process.env.GITHUB_REPOSITORY.split("/");
+              // 跳過機器人自己推的活動，避免噪音
+              if (e.actor?.login === 'github-actions[bot]') continue;
 
-          async function main() {
-            try {
-              const { data: events } = await octokit.activity.listRepoEvents({
-                owner,
-                repo,
-                per_page: 10
-              });
-
-              let log = "";
-              for (const e of events) {
-                if (e.type === "IssuesEvent") {
-                  if (e.payload.action === "opened") {
-                    log += `- 🟢 Opened issue [#${e.payload.issue.number}](${e.payload.issue.html_url}) — *${e.payload.issue.title}* (${e.payload.issue.user.login})\n`;
-                  } else if (e.payload.action === "closed") {
-                    log += `- 🔴 Closed issue [#${e.payload.issue.number}](${e.payload.issue.html_url}) — *${e.payload.issue.title}*\n`;
-                  }
-                } else if (e.type === "PullRequestEvent") {
-                  if (e.payload.action === "opened") {
-                    log += `- 📌 Opened PR [#${e.payload.pull_request.number}](${e.payload.pull_request.html_url}) — *${e.payload.pull_request.title}*\n`;
-                  } else if (e.payload.action === "closed" && e.payload.pull_request.merged) {
-                    log += `- 🎉 Merged PR [#${e.payload.pull_request.number}](${e.payload.pull_request.html_url})\n`;
-                  }
-                } else if (e.type === "PushEvent") {
-                  log += `- 🚀 Pushed ${e.payload.commits.length} commit(s) to [${e.repo.name}](https://github.com/${e.repo.name}/commits/${e.payload.ref.replace("refs/heads/","")})\n`;
+              switch (e.type) {
+                case 'IssuesEvent': {
+                  const issue = e.payload.issue;
+                  if (!issue) break;
+                  const act = e.payload.action; // opened/closed/reopened
+                  const emoji = act === 'opened' ? '🟢' : act === 'closed' ? '🔴' : '🟡';
+                  lines.push(`- ${emoji} **${act}** issue [#${issue.number}](${issue.html_url}) — _${issue.title}_`);
+                  break;
                 }
+                case 'PullRequestEvent': {
+                  const pr = e.payload.pull_request;
+                  if (!pr) break;
+                  let act = e.payload.action;
+                  let emoji = '📌';
+                  if (act === 'closed' && pr.merged) { act = 'merged'; emoji = '🎉'; }
+                  else if (act === 'closed') { emoji = '❌'; }
+                  lines.push(`- ${emoji} **${act}** PR [#${pr.number}](${pr.html_url}) — _${pr.title}_`);
+                  break;
+                }
+                case 'PushEvent': {
+                  const branch = e.payload.ref?.replace('refs/heads/', '') || 'main';
+                  const count  = e.payload.commits?.length || 1;
+                  lines.push(`- 🚀 pushed **${count}** commit(s) to [${branch}](${repoUrl}/commits/${branch})`);
+                  break;
+                }
+                default:
+                  // 需要可再擴充（ReleaseEvent、CreateEvent…）
               }
-
-              fs.appendFileSync("activity.md", log || "- ℹ️ No recent activity.\n");
-            } catch (err) {
-              console.error("Error fetching events:", err);
-              process.exit(1);
             }
-          }
-          main();
-          EOF
 
-          echo "<!--ACTIVITY-END-->" >> activity.md
+            const heading = '## 🔥 Recent Activities';
+            const body = (lines.length ? lines.join('\n') : '- ℹ️ No recent activity.').trim();
 
+            const fs = require('fs');
+            fs.writeFileSync('activity.md', `${heading}\n${body}\n`);
+
+      - name: Update README between markers
+        run: |
+          # 以 activity.md 覆寫 README 中的標記區塊
           awk 'BEGIN{start=0} /<!--ACTIVITY-START-->/ {print; while((getline line < "activity.md") > 0) print line; start=1; next} /<!--ACTIVITY-END-->/ {if(!start) print} !/<!--ACTIVITY-START-->/ && !/<!--ACTIVITY-END-->/' README.md > README.new
           mv README.new README.md
 
       - name: Commit changes
         run: |
-          git config user.name "github-actions[bot]"
+          git config user.name  "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add README.md
           git commit -m "chore: update GitHub activity" || echo "No changes to commit"
           git push
-        env:
-          REPO_TOKEN: ${{ secrets.REPO_TOKEN }}
