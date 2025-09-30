@@ -1,3 +1,4 @@
 ## 🔥 Recent Activities
 <!--ACTIVITY-START-->
-<!--ACTIVITY-END-->
+## 🔥 Recent Activities
+- 🟢 **opened** issue [#1](https://github.com/jayterry/work-project/issues/1) — _test_
