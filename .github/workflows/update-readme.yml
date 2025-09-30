@@ -1,12 +1,12 @@
 name: Update README Activity
 
 on:
-  workflow_dispatch:   # 手動觸發
+  workflow_dispatch:
   schedule:
-    - cron: "0 * * * *"   # 每小時跑一次
+    - cron: "0 * * * *"
 
 permissions:
-  contents: write   # 允許修改 README.md
+  contents: write
 
 jobs:
   update-readme:
@@ -22,8 +22,14 @@ jobs:
           git log -n 5 --pretty=format:"- %s (%h) %ad" --date=short >> activity.md
           echo "<!--ACTIVITY-END-->" >> activity.md
 
-          # 用 sed 更新 README.md markers 區塊
-          sed -i '/<!--ACTIVITY-START-->/,<!--ACTIVITY-END-->/c\<!--ACTIVITY-START-->\n'"$(cat activity.md)"'\n<!--ACTIVITY-END-->' README.md
+          # 用 awk 替換 README.md 中的 marker 區塊
+          awk '
+            /<!--ACTIVITY-START-->/ {print; system("cat activity.md"); skip=1; next}
+            /<!--ACTIVITY-END-->/ {print; skip=0; next}
+            skip==0 {print}
+          ' README.md > README.new
+
+          mv README.new README.md
 
       - name: Commit changes
         run: |
