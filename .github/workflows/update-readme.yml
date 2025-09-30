@@ -1,0 +1,34 @@
+name: Update README Activity
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 * * * *"  # 每小時跑一次
+
+permissions:
+  contents: write
+
+jobs:
+  update-readme:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Generate recent commits
+        run: |
+          echo "## Recent Activity" > recent.md
+          echo "<!--ACTIVITY-START-->" >> recent.md
+          git log -n 5 --pretty=format:"- %s (%h) %ad" --date=short >> recent.md
+          echo "<!--ACTIVITY-END-->" >> recent.md
+
+          awk 'BEGIN{start=0} /<!--ACTIVITY-START-->/ {print; system("tail -n +2 recent.md | head -n -1"); start=1; next} /<!--ACTIVITY-END-->/ {print; start=0; next} !start {print}' README.md > README.new
+          mv README.new README.md
+
+      - name: Commit changes
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add README.md
+          git commit -m "chore: update recent activity" || echo "No changes to commit"
+          git push
