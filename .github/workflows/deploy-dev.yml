@@ -35,9 +35,14 @@ jobs:
         with:
           name: build-artifact
 
-      - name: Create GitHub Release (Dev)
+      - name: Authenticate GitHub CLI
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          echo "${GITHUB_TOKEN}" | gh auth login --with-token
+
+      - name: Create GitHub Release (Dev)
+        env:
           TAG: ${{ vars.BUILD_TAG }}
           NOTE: ${{ vars.RELEASE_NOTE }}
         run: |
