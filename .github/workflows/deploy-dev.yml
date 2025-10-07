@@ -5,7 +5,7 @@ on:
     branches: [ main ]
 
 permissions:
-  contents: write   # ✅ 允許建立 release
+  contents: write   # 允許建立 release
   actions: read
 
 jobs:
@@ -34,6 +34,9 @@ jobs:
     runs-on: ubuntu-latest
     environment: dev
     steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
       - name: Download artifact
         uses: actions/download-artifact@v4
         with:
