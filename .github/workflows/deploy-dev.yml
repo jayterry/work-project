@@ -11,16 +11,13 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 20
-
-      - name: Install dependencies and build
+      - name: Simulate Build
         run: |
-          npm install
-          npm run build
-          zip -r build.zip .
+          echo "🧱 Simulating build process..."
+          mkdir build
+          echo "Build complete at $(date)" > build/info.txt
+          zip -r build.zip build
+          echo "✅ Fake build.zip created successfully."
 
       - name: Upload build artifact
         uses: actions/upload-artifact@v4
@@ -44,6 +41,6 @@ jobs:
           TAG: ${{ vars.BUILD_TAG }}
           NOTE: ${{ vars.RELEASE_NOTE }}
         run: |
-          echo "🏗️ Creating Dev Release..."
+          echo "🚀 Creating Dev Release..."
           gh release create "$TAG" build.zip --notes "$NOTE"
           echo "✅ Release $TAG created successfully"
