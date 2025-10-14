@@ -31,21 +31,43 @@ jobs:
           path: build.zip
 
   # === 🧪 Unit Test Job ===
+  # === 🧪 Unit Test Job ===
   test-unit:
     runs-on: ubuntu-latest
     needs: build
     steps:
-      - uses: actions/checkout@v4   # 必須先 checkout，否則找不到 package.json
+      - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
         with:
           name: build-artifact
       - uses: actions/setup-node@v4
         with:
           node-version: 20
+
       - name: Install dependencies
         run: npm install
-      - name: Run unit tests
+
+      - name: Run unit tests with coverage
         run: npm run test:unit
+
+      - name: Check coverage threshold
+        run: |
+          coverage=$(jq '.total.lines.pct' coverage/coverage-summary.json)
+          echo "Coverage: $coverage%"
+          # 轉成整數再比對
+          cov_int=${coverage%.*}
+          if [ "$cov_int" -lt 80 ]; then
+            echo "❌ Coverage below 80% threshold"
+            exit 1
+          fi
+          echo "✅ Coverage passed threshold"
+
+      - name: Upload coverage report
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: coverage
+
 
   # === 🔗 Integration Test Job ===
   test-integration:
