@@ -1,3 +1,4 @@
+![CI](https://github.com/jayterry/work-project/actions/workflows/a5-automated-testing.yml/badge.svg)
 ## 🔥 Recent Activities
 <!--ACTIVITY-START-->
 🔥 **Recent Activities**
