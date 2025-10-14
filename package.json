@@ -2,9 +2,24 @@
   "name": "a5-demo",
   "version": "1.0.0",
   "scripts": {
-    "test": "jest --coverage"
+    "test:unit": "jest --selectProjects unit --coverage",
+    "test:integration": "jest --selectProjects integration --coverage"
   },
   "devDependencies": {
     "jest": "^29.7.0"
+  },
+  "jest": {
+    "projects": [
+      {
+        "displayName": "unit",
+        "testMatch": ["**/__tests__/unit/**/*.test.js"]
+      },
+      {
+        "displayName": "integration",
+        "testMatch": ["**/__tests__/integration/**/*.test.js"]
+      }
+    ],
+    "coverageDirectory": "coverage",
+    "coverageReporters": ["text", "lcov", "json-summary"]
   }
 }
