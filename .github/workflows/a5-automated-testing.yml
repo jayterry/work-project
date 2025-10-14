@@ -1,0 +1,170 @@
+name: CI/CD Deployment Assignment5
+
+permissions:
+  contents: write
+  issues: write
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  # === 1️⃣ Build Job ===
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Build project
+        run: |
+          echo "🏗️ Simulating build process..."
+          mkdir build
+          echo "Build completed at $(date)" > build/info.txt
+          zip -r build.zip build
+          echo "✅ Build artifact created."
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-artifact
+          path: build.zip
+
+  # === 2️⃣ Automated Test Job ===
+  test:
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - name: Download build artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: build-artifact
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run Automated Tests
+        run: |
+          echo "🧪 Running automated tests..."
+          npx jest --coverage || (echo "❌ Tests failed" && exit 1)
+
+      - name: Upload coverage report
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: coverage/
+
+  # === 3️⃣ Auto-Version Job ===
+  auto-version:
+    runs-on: ubuntu-latest
+    needs: test
+    outputs:
+      version: ${{ steps.setver.outputs.version }}
+      note: ${{ steps.note.outputs.note }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Get previous tag
+        id: get_prev
+        run: |
+          prev=$(git describe --tags --abbrev=0 2>/dev/null || echo "v1.0.0")
+          echo "Previous version: $prev"
+          echo "prev=$prev" >> $GITHUB_ENV
+
+      - name: Determine new version
+        id: setver
+        run: |
+          prev=${{ env.prev }}
+          major=$(echo $prev | cut -d. -f1 | tr -d 'v')
+          minor=$(echo $prev | cut -d. -f2)
+          patch=$(echo $prev | cut -d. -f3)
+          msg=$(git log -1 --pretty=%B)
+
+          if [[ $msg == *"#major"* ]]; then
+            major=$((major+1)); minor=0; patch=0
+          elif [[ $msg == *"#minor"* ]]; then
+            minor=$((minor+1)); patch=0
+          elif [[ $msg == *"#patch"* ]]; then
+            patch=$((patch+1))
+          fi
+
+          new="v${major}.${minor}.${patch}"
+          echo "New version: $new"
+          echo "version=$new" >> $GITHUB_OUTPUT
+
+      - name: Generate release note
+        id: note
+        run: |
+          msg=$(git log -1 --pretty=%B)
+          safe_msg=$(echo "$msg" | sed 's/%/%25/g; s/\r/%0D/g; s/\n/%0A/g')
+          echo "note=$safe_msg" >> $GITHUB_OUTPUT
+          echo "Release note: $msg"
+
+  # === 4️⃣ Deploy to Staging (only if tests passed) ===
+  deploy-staging:
+    runs-on: ubuntu-latest
+    needs: [auto-version, test]
+    if: ${{ success() }}
+    environment: staging
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Download artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: build-artifact
+
+      - name: Deploy to Staging
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ needs.auto-version.outputs.version }}
+          NOTE: ${{ needs.auto-version.outputs.note }}
+        run: |
+          echo "🚀 Deploying to Staging..."
+          gh release create "$TAG" build.zip --notes "$NOTE" || echo "⚠️ Release already exists."
+          echo "✅ Staging release $TAG created successfully."
+
+  # === 5️⃣ Deploy to Production (manual approval required) ===
+  deploy-production:
+    runs-on: ubuntu-latest
+    needs: deploy-staging
+    environment: production
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Download artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: build-artifact
+
+      - name: Deploy to Production
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ needs.auto-version.outputs.version }}
+          NOTE: ${{ needs.auto-version.outputs.note }}
+        run: |
+          echo "🚀 Deploying to Production..."
+          gh release create "$TAG" build.zip --notes "$NOTE" || echo "⚠️ Release already exists."
+          echo "✅ Production release $TAG created successfully."
+
+  # === 6️⃣ Notify on Failure ===
+  notify-on-fail:
+    runs-on: ubuntu-latest
+    needs: [build, test, auto-version, deploy-staging, deploy-production]
+    if: ${{ failure() }}
+    steps:
+      - name: Create Issue on Failure
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh issue create --title "❌ CI/CD Pipeline Failed (Run #${{ github.run_number }})" \
+            --body "A job in the pipeline failed. Please check workflow logs for details."
