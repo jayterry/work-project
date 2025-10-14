@@ -31,7 +31,6 @@ jobs:
           path: build.zip
 
   # === 🧪 Unit Test Job ===
-  # === 🧪 Unit Test Job ===
   test-unit:
     runs-on: ubuntu-latest
     needs: build
@@ -54,7 +53,6 @@ jobs:
         run: |
           coverage=$(jq '.total.lines.pct' coverage/coverage-summary.json)
           echo "Coverage: $coverage%"
-          # 轉成整數再比對
           cov_int=${coverage%.*}
           if [ "$cov_int" -lt 80 ]; then
             echo "❌ Coverage below 80% threshold"
